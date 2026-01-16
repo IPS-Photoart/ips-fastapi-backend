@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Certificate Payment</title>
+    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+</head>
+<body style="font-family: Arial; padding: 40px;">
+
+    <h2>Pay for Certificate</h2>
+
+    <label>Certificate Code:</label><br><br>
+    <input type="text" id="certCode" placeholder="IPS-2026-000009" style="width:300px;"><br><br>
+
+    <button onclick="payNow()">Pay ₹500</button>
+
+    <p id="status"></p>
+
+    <script>
+        async function payNow() {
+            const certCode = document.getElementById("certCode").value.trim();
+
+            if (!certCode) {
+                alert("Enter certificate code");
+                return;
+            }
+
+            document.getElementById("status").innerText = "Creating order...";
+
+            const response = await fetch(
+                `http://127.0.0.1:8000/payment/create-order/${certCode}`,
+                { method: "POST" }
+            );
+
+            if (!response.ok) {
+                document.getElementById("status").innerText = "Order creation failed";
+                return;
+            }
+
+            const order = await response.json();
+
+            const options = {
+                key: "rzp_test_RukSGNdMPjAiNF",
+                amount: order.amount,
+                currency: order.currency,
+                name: "Indian Photographic Society",
+                description: "Certificate Fee",
+                order_id: order.id,
+                handler: function (response) {
+                    document.getElementById("status").innerText =
+                        "Payment successful. Certificate will unlock shortly.";
+                }
+            };
+
+            const rzp = new Razorpay(options);
+            rzp.open();
+        }
+    </script>
+
+</body>
+</html>

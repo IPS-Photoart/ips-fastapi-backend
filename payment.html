@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Certificate Payment</title>
+  <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+</head>
+<body>
+
+<h2>Pay ₹500 for Certificate</h2>
+<button id="pay-btn">Pay Now</button>
+
+<script>
+  const orderId = "order_Rv2fNMji25AXql";
+
+  const options = {
+    key: "rzp_test_RukSGNdMPjAiNF",
+    amount: 50000,
+    currency: "INR",
+    name: "Indian Photographic Society",
+    description: "Certificate Payment",
+    order_id: orderId,
+    handler: function (response) {
+      alert("Payment successful!");
+      alert("Payment ID: " + response.razorpay_payment_id);
+    }
+  };
+
+  const rzp = new Razorpay(options);
+
+  document.getElementById("pay-btn").onclick = function () {
+    rzp.open();
+  };
+</script>
+
+</body>
+</html>
