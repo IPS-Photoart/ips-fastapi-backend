@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+sqlmodel
+sqlalchemy
+pydantic
+pillow
+qrcode
+razorpay
+python-multipart
+email-validator
