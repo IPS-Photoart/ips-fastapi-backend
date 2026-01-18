@@ -161,7 +161,7 @@ def list_certificates():
 
 
 # -------------------------------------------------
-# EXAM QUESTIONS (PLACEHOLDER STRUCTURE)
+# EXAM QUESTIONS
 # -------------------------------------------------
 @app.get("/exam/{certificate_code}/questions")
 def get_exam(certificate_code: str):
@@ -172,61 +172,62 @@ def get_exam(certificate_code: str):
 
         if not cert:
             raise HTTPException(404, "Invalid certificate")
-	questions = []
 
-if cert.code == "LEVEL-1":
-    questions = [
-        {
-            "id": 1,
-            "question": "Which element controls the amount of light entering the camera?",
-            "options": [
-                "ISO",
-                "Shutter Speed",
-                "Aperture",
-                "White Balance"
+        questions = []
+
+        if cert.code == "LEVEL-1":
+            questions = [
+                {
+                    "id": 1,
+                    "question": "Which element controls the amount of light entering the camera?",
+                    "options": [
+                        "ISO",
+                        "Shutter Speed",
+                        "Aperture",
+                        "White Balance"
+                    ]
+                },
+                {
+                    "id": 2,
+                    "question": "Which camera setting primarily controls image noise?",
+                    "options": [
+                        "Aperture",
+                        "ISO",
+                        "Shutter Speed",
+                        "Focal Length"
+                    ]
+                },
+                {
+                    "id": 3,
+                    "question": "Shutter speed mainly affects which aspect of a photograph?",
+                    "options": [
+                        "Colour saturation",
+                        "Motion blur",
+                        "Lens sharpness",
+                        "Sensor size"
+                    ]
+                },
+                {
+                    "id": 4,
+                    "question": "What does a lower f-number (e.g. f/1.8) indicate?",
+                    "options": [
+                        "Small aperture",
+                        "Large aperture",
+                        "Low ISO",
+                        "Slow shutter speed"
+                    ]
+                },
+                {
+                    "id": 5,
+                    "question": "Which three elements form the exposure triangle?",
+                    "options": [
+                        "ISO, Aperture, Shutter Speed",
+                        "ISO, Focus, Zoom",
+                        "Aperture, White Balance, FPS",
+                        "Shutter Speed, Colour, ISO"
+                    ]
+                }
             ]
-        },
-        {
-            "id": 2,
-            "question": "Which camera setting primarily controls image noise?",
-            "options": [
-                "Aperture",
-                "ISO",
-                "Shutter Speed",
-                "Focal Length"
-            ]
-        },
-        {
-            "id": 3,
-            "question": "Shutter speed mainly affects which aspect of a photograph?",
-            "options": [
-                "Colour saturation",
-                "Motion blur",
-                "Lens sharpness",
-                "Sensor size"
-            ]
-        },
-        {
-            "id": 4,
-            "question": "What does a lower f-number (e.g. f/1.8) indicate?",
-            "options": [
-                "Small aperture",
-                "Large aperture",
-                "Low ISO",
-                "Slow shutter speed"
-            ]
-        },
-        {
-            "id": 5,
-            "question": "Which three elements form the exposure triangle?",
-            "options": [
-                "ISO, Aperture, Shutter Speed",
-                "ISO, Focus, Zoom",
-                "Aperture, White Balance, FPS",
-                "Shutter Speed, Colour, ISO"
-            ]
-        }
-    ]
 
         return {
             "certificate": f"{cert.title} ({cert.abbreviation})",
@@ -235,9 +236,8 @@ if cert.code == "LEVEL-1":
             "short_answer_count": cert.short_answer_count,
             "mcq_mark": cert.mcq_mark,
             "pass_percentage": cert.pass_percentage,
-            "questions": questions,  # frontend renders dynamically
+            "questions": questions,
         }
-
 
 # -------------------------------------------------
 # EXAM SUBMISSION (UNLIMITED ATTEMPTS)
