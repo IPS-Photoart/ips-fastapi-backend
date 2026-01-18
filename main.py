@@ -161,7 +161,7 @@ def list_certificates():
 
 
 # -------------------------------------------------
-# EXAM QUESTIONS
+# EXAM QUESTIONS (LEVEL 1 MCQs ENABLED)
 # -------------------------------------------------
 @app.get("/exam/{certificate_code}/questions")
 def get_exam(certificate_code: str):
@@ -175,7 +175,7 @@ def get_exam(certificate_code: str):
 
         questions = []
 
-        if cert.code == "LEVEL-1":
+        if certificate_code == "LEVEL-1":
             questions = [
                 {
                     "id": 1,
@@ -238,6 +238,7 @@ def get_exam(certificate_code: str):
             "pass_percentage": cert.pass_percentage,
             "questions": questions,
         }
+
 
 # -------------------------------------------------
 # EXAM SUBMISSION (UNLIMITED ATTEMPTS)
