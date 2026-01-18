@@ -38,7 +38,7 @@ from email_service import send_certificate_email
 app = FastAPI(title="IPS Automated Certification Platform")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-BASE_URL = "https://ips-photoart.github.io"
+BASE_URL = "https://ips-fastapi-backend.onrender.com"
 
 razorpay_client = razorpay.Client(
     auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET)
