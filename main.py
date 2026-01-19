@@ -1,11 +1,8 @@
-from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-
 from sqlmodel import select
-from typing import List, Optional
+from typing import Optional
 from datetime import datetime
-import os
 
 from database import (
     create_db_and_tables,
@@ -23,7 +20,7 @@ app = FastAPI(title="IPS Certification Backend")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # frontend is GitHub Pages
+    allow_origins=["*"],  # GitHub Pages frontend
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -31,16 +28,15 @@ app.add_middleware(
 BASE_URL = "https://ips-fastapi-backend.onrender.com"
 
 # -------------------------------------------------
-# STARTUP: CREATE TABLES + SEED CERTIFICATES
+# STARTUP
 # -------------------------------------------------
 @app.on_event("startup")
 def startup():
     create_db_and_tables()
     seed_certificates()
 
-
 # -------------------------------------------------
-# SEED CERTIFICATE MASTER (CRITICAL)
+# SEED CERTIFICATES
 # -------------------------------------------------
 def seed_certificates():
     certificates = [
@@ -132,7 +128,6 @@ def seed_certificates():
                 session.add(CertificateType(**c))
         session.commit()
 
-
 # -------------------------------------------------
 # HEALTH
 # -------------------------------------------------
@@ -140,9 +135,8 @@ def seed_certificates():
 def health():
     return {"status": "ok"}
 
-
 # -------------------------------------------------
-# LIST CERTIFICATES (FOR DROPDOWN)
+# LIST CERTIFICATES
 # -------------------------------------------------
 @app.get("/certificates")
 def list_certificates():
@@ -159,9 +153,52 @@ def list_certificates():
             for c in certs
         ]
 
+# -------------------------------------------------
+# LEVEL-1 MCQs + ANSWER KEY
+# -------------------------------------------------
+LEVEL_1_QUESTIONS = [
+    {
+        "id": 1,
+        "question": "Which element controls the amount of light entering the camera?",
+        "options": ["ISO", "Shutter Speed", "Aperture", "White Balance"],
+    },
+    {
+        "id": 2,
+        "question": "Which camera setting primarily controls image noise?",
+        "options": ["Aperture", "ISO", "Shutter Speed", "Focal Length"],
+    },
+    {
+        "id": 3,
+        "question": "Shutter speed mainly affects which aspect of a photograph?",
+        "options": ["Colour saturation", "Motion blur", "Lens sharpness", "Sensor size"],
+    },
+    {
+        "id": 4,
+        "question": "What does a lower f-number (e.g. f/1.8) indicate?",
+        "options": ["Small aperture", "Large aperture", "Low ISO", "Slow shutter speed"],
+    },
+    {
+        "id": 5,
+        "question": "Which three elements form the exposure triangle?",
+        "options": [
+            "ISO, Aperture, Shutter Speed",
+            "ISO, Focus, Zoom",
+            "Aperture, White Balance, FPS",
+            "Shutter Speed, Colour, ISO",
+        ],
+    },
+]
+
+LEVEL_1_ANSWER_KEY = {
+    1: 3,
+    2: 2,
+    3: 2,
+    4: 2,
+    5: 1,
+}
 
 # -------------------------------------------------
-# EXAM QUESTIONS (LEVEL 1 MCQs ENABLED)
+# EXAM QUESTIONS
 # -------------------------------------------------
 @app.get("/exam/{certificate_code}/questions")
 def get_exam(certificate_code: str):
@@ -173,61 +210,7 @@ def get_exam(certificate_code: str):
         if not cert:
             raise HTTPException(404, "Invalid certificate")
 
-        questions = []
-
-        if certificate_code == "LEVEL-1":
-            questions = [
-                {
-                    "id": 1,
-                    "question": "Which element controls the amount of light entering the camera?",
-                    "options": [
-                        "ISO",
-                        "Shutter Speed",
-                        "Aperture",
-                        "White Balance"
-                    ]
-                },
-                {
-                    "id": 2,
-                    "question": "Which camera setting primarily controls image noise?",
-                    "options": [
-                        "Aperture",
-                        "ISO",
-                        "Shutter Speed",
-                        "Focal Length"
-                    ]
-                },
-                {
-                    "id": 3,
-                    "question": "Shutter speed mainly affects which aspect of a photograph?",
-                    "options": [
-                        "Colour saturation",
-                        "Motion blur",
-                        "Lens sharpness",
-                        "Sensor size"
-                    ]
-                },
-                {
-                    "id": 4,
-                    "question": "What does a lower f-number (e.g. f/1.8) indicate?",
-                    "options": [
-                        "Small aperture",
-                        "Large aperture",
-                        "Low ISO",
-                        "Slow shutter speed"
-                    ]
-                },
-                {
-                    "id": 5,
-                    "question": "Which three elements form the exposure triangle?",
-                    "options": [
-                        "ISO, Aperture, Shutter Speed",
-                        "ISO, Focus, Zoom",
-                        "Aperture, White Balance, FPS",
-                        "Shutter Speed, Colour, ISO"
-                    ]
-                }
-            ]
+        questions = LEVEL_1_QUESTIONS if certificate_code == "LEVEL-1" else []
 
         return {
             "certificate": f"{cert.title} ({cert.abbreviation})",
@@ -239,90 +222,43 @@ def get_exam(certificate_code: str):
             "questions": questions,
         }
 
-
 # -------------------------------------------------
-# EXAM SUBMISSION (UNLIMITED ATTEMPTS)
+# EXAM SUBMISSION (MCQ EVALUATION)
 # -------------------------------------------------
 @app.post("/exam/{certificate_code}/submit")
-def submit_exam(
-    certificate_code: str,
-    user_name: str,
-    user_email: Optional[str],
-    marks_obtained: int,
-):
-    with get_session() as session:
-        cert = session.exec(
-            select(CertificateType).where(CertificateType.code == certificate_code)
-        ).first()
+def submit_exam(certificate_code: str, payload: dict):
+    answers = payload.get("answers", [])
 
-        if not cert:
-            raise HTTPException(404, "Invalid certificate")
+    if certificate_code != "LEVEL-1":
+        raise HTTPException(400, "Scoring not enabled for this certificate")
 
-        user = None
-        if user_email:
-            user = session.exec(
-                select(User).where(User.email == user_email)
-            ).first()
+    total_questions = len(LEVEL_1_ANSWER_KEY)
+    marks_per_question = 4
+    total_marks = total_questions * marks_per_question
 
-        if not user:
-            user = User(full_name=user_name, email=user_email)
-            session.add(user)
-            session.commit()
-            session.refresh(user)
+    obtained = 0
+    for a in answers:
+        qid = a.get("question_id")
+        selected = a.get("selected_option")
+        if LEVEL_1_ANSWER_KEY.get(qid) == selected:
+            obtained += marks_per_question
 
-        total_marks = cert.mcq_count * cert.mcq_mark
-        percentage = (marks_obtained / total_marks) * 100
-        passed = percentage >= cert.pass_percentage
+    percentage = (obtained / total_marks) * 100
+    passed = percentage >= 50.0
 
-        attempt = Attempt(
-            user_id=user.id,
-            certificate_code=cert.code,
-            total_marks=total_marks,
-            marks_obtained=marks_obtained,
-            percentage=percentage,
-            is_passed=passed,
-        )
-        session.add(attempt)
-        session.commit()
-
-        cert_code = None
-        if passed:
-            issued = Certificate(
-                user_id=user.id,
-                certificate_type_code=cert.code,
-                certificate_code=f"IPS-{cert.code}-{attempt.id}",
-                grade="PASS",
-                percentage=percentage,
-                is_paid=False,
-                verification_url=f"{BASE_URL}/verify/IPS-{cert.code}-{attempt.id}",
-            )
-            session.add(issued)
-            session.commit()
-            cert_code = issued.certificate_code
-
-        return {
-            "passed": passed,
-            "percentage": round(percentage, 2),
-            "certificate_code": cert_code,
-        }
-
+    return {
+        "total_marks": total_marks,
+        "marks_obtained": obtained,
+        "percentage": round(percentage, 2),
+        "result": "PASS" if passed else "FAIL",
+    }
 
 # -------------------------------------------------
-# VERIFY CERTIFICATE
+# VERIFY CERTIFICATE (PLACEHOLDER)
 # -------------------------------------------------
 @app.get("/verify/{certificate_code}")
 def verify(certificate_code: str):
-    with get_session() as session:
-        cert = session.exec(
-            select(Certificate).where(Certificate.certificate_code == certificate_code)
-        ).first()
-
-        if not cert:
-            raise HTTPException(404, "Certificate not found")
-
-        return {
-            "certificate_code": cert.certificate_code,
-            "percentage": cert.percentage,
-            "issued_at": cert.issued_at,
-            "paid": cert.is_paid,
-        }
+    return {
+        "certificate_code": certificate_code,
+        "status": "Verification endpoint active",
+    }
