@@ -161,8 +161,13 @@ def list_certificates():
 # -------------------------------------------------
 # LOAD EXAM QUESTIONS (DB-BASED)
 # -------------------------------------------------
-@app.get("/exam/{certificate_code}/questions")
-def get_exam(certificate_code: str):
+@app.post("/exam/{certificate_code}/submit")
+def submit_exam(
+    certificate_code: str,
+    payload: dict = Body(...)
+):
+    answers = payload.get("answers", [])
+
     with get_session() as session:
         cert = session.exec(
             select(CertificateType).where(CertificateType.code == certificate_code)
@@ -170,37 +175,53 @@ def get_exam(certificate_code: str):
         if not cert:
             raise HTTPException(404, "Invalid certificate")
 
-        questions_db = session.exec(
-            select(Question).where(Question.certificate_code == certificate_code)
-        ).all()
+        total_marks = cert.mcq_count * cert.mcq_mark
+        obtained = 0
 
-        questions = []
-        for q in questions_db:
-            if q.question_type == "MCQ":
-                options = session.exec(
-                    select(Option).where(Option.question_id == q.id)
-                ).all()
-                questions.append({
-                    "id": q.id,
-                    "question": q.question_text,
-                    "options": [o.option_text for o in options],
-                })
-            else:
-                questions.append({
-                    "id": q.id,
-                    "question": q.question_text,
-                    "type": "SHORT",
-                })
+        attempt = Attempt(
+            user_id=0,
+            certificate_code=certificate_code,
+            total_marks=total_marks,
+            marks_obtained=0,
+            percentage=0,
+            is_passed=False,
+        )
+        session.add(attempt)
+        session.commit()
+        session.refresh(attempt)
+
+        for a in answers:
+            q = session.get(Question, a["question_id"])
+            if not q:
+                continue
+
+            marks = 0
+            if a["selected_option"] == q.correct_option:
+                marks = cert.mcq_mark
+                obtained += marks
+
+            session.add(Answer(
+                attempt_id=attempt.id,
+                question_id=q.id,
+                answer_text=str(a.get("selected_option")),
+                marks_awarded=marks
+            ))
+
+        percentage = (obtained / total_marks) * 100 if total_marks else 0
+        passed = percentage >= cert.pass_percentage
+
+        attempt.marks_obtained = obtained
+        attempt.percentage = percentage
+        attempt.is_passed = passed
+        session.commit()
 
         return {
-            "certificate": f"{cert.title} ({cert.abbreviation})",
-            "duration_minutes": cert.duration_minutes,
-            "mcq_count": cert.mcq_count,
-            "short_answer_count": cert.short_answer_count,
-            "mcq_mark": cert.mcq_mark,
-            "pass_percentage": cert.pass_percentage,
-            "questions": questions,
+            "result": "PASS" if passed else "FAIL",
+            "marks_obtained": obtained,
+            "total_marks": total_marks,
+            "percentage": round(percentage, 2),
         }
+
 
 # -------------------------------------------------
 # SUBMIT EXAM (MCQs EVALUATED, SHORT STORED)
