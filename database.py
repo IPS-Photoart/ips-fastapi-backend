@@ -50,6 +50,14 @@ class Attempt(SQLModel, table=True):
     is_passed: bool
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
+class Answer(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+
+    attempt_id: int = Field(foreign_key="attempt.id")
+    question_id: int = Field(foreign_key="question.id")
+
+    selected_option: Optional[int] = None
+    marks_awarded: int = 0
 
 class Certificate(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
