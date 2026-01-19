@@ -10,10 +10,10 @@ from database import (
     User,
     CertificateType,
     Attempt,
-    Answer,
     Certificate,
+    Answer,
     Question,
-    MCQOption,
+    Option,
 )
 
 # -------------------------------------------------
@@ -117,7 +117,7 @@ def get_exam(certificate_code: str):
         for q in questions_db:
             if q.question_type == "MCQ":
                 options = session.exec(
-                    select(MCQOption).where(MCQOption.question_id == q.id)
+                    select(Option).where(Option.question_id == q.id)
                 ).all()
                 questions.append({
                     "id": q.id,
@@ -181,9 +181,9 @@ def submit_exam(
             marks = 0
             if q.question_type == "MCQ":
                 opt = session.exec(
-                    select(MCQOption).where(
-                        MCQOption.question_id == q.id,
-                        MCQOption.option_text != None
+                    select(Option).where(
+                        Option.question_id == q.id,
+                        Option.option_text != None
                     )
                 ).all()
                 correct = next((o for o in opt if o.is_correct), None)
