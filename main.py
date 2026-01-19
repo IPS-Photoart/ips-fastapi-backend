@@ -1,9 +1,8 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Body
 from fastapi.middleware.cors import CORSMiddleware
 from sqlmodel import select
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
-from fastapi import Body
 
 from database import (
     create_db_and_tables,
@@ -11,7 +10,10 @@ from database import (
     User,
     CertificateType,
     Attempt,
+    Answer,
     Certificate,
+    Question,
+    MCQOption,
 )
 
 # -------------------------------------------------
@@ -21,7 +23,7 @@ app = FastAPI(title="IPS Certification Backend")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # GitHub Pages frontend
+    allow_origins=["*"],  # GitHub Pages
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -37,96 +39,37 @@ def startup():
     seed_certificates()
 
 # -------------------------------------------------
-# SEED CERTIFICATES
+# SEED CERTIFICATES (SAFE)
 # -------------------------------------------------
 def seed_certificates():
     certificates = [
-        {
-            "code": "LEVEL-1",
-            "title": "Level 1 – Basic Photography",
-            "abbreviation": "L1-BP",
-            "duration_minutes": 30,
-            "mcq_count": 25,
-            "short_answer_count": 0,
-            "mcq_mark": 4,
-            "pass_percentage": 50.0,
-            "description": "Exposure triangle, ISO, aperture, shutter speed",
-        },
-        {
-            "code": "LEVEL-2",
-            "title": "Level 2 – Intermediate Composition & Lighting",
-            "abbreviation": "L2-ICL",
-            "duration_minutes": 45,
-            "mcq_count": 20,
-            "short_answer_count": 5,
-            "mcq_mark": 4,
-            "pass_percentage": 50.0,
-            "description": "High/low key, framing, positive & negative space",
-        },
-        {
-            "code": "LEVEL-3",
-            "title": "Level 3 – Professional Photography Fundamentals Completion Certificate",
-            "abbreviation": "L3-PPF",
-            "duration_minutes": 60,
-            "mcq_count": 20,
-            "short_answer_count": 5,
-            "mcq_mark": 4,
-            "pass_percentage": 50.0,
-            "description": "Advanced analytical MCQs & short answers",
-        },
-        {
-            "code": "EPM-IWP",
-            "title": "Elite Professional Master in Indian Wedding Photography",
-            "abbreviation": "EPM-IWP",
-            "duration_minutes": 90,
-            "mcq_count": 20,
-            "short_answer_count": 5,
-            "mcq_mark": 4,
-            "pass_percentage": 60.0,
-            "description": "Subject oriented, technical & practical field work",
-        },
-        {
-            "code": "EPM-EP",
-            "title": "Elite Professional Master in Event Photography",
-            "abbreviation": "EPM-EP",
-            "duration_minutes": 90,
-            "mcq_count": 20,
-            "short_answer_count": 5,
-            "mcq_mark": 4,
-            "pass_percentage": 60.0,
-            "description": "Subject oriented, technical & practical field work",
-        },
-        {
-            "code": "EPM-CPP",
-            "title": "Elite Professional Master in Commercial Product Photography",
-            "abbreviation": "EPM-CPP",
-            "duration_minutes": 90,
-            "mcq_count": 20,
-            "short_answer_count": 5,
-            "mcq_mark": 4,
-            "pass_percentage": 60.0,
-            "description": "Subject oriented, technical & practical field work",
-        },
-        {
-            "code": "EPM-WP",
-            "title": "Elite Professional Master in Wildlife Photography",
-            "abbreviation": "EPM-WP",
-            "duration_minutes": 90,
-            "mcq_count": 20,
-            "short_answer_count": 5,
-            "mcq_mark": 4,
-            "pass_percentage": 60.0,
-            "description": "Subject oriented, technical & practical field work",
-        },
+        ("LEVEL-1","Level 1 – Basic Photography","L1-BP",30,25,0,4,50.0,
+         "Exposure triangle, ISO, aperture, shutter speed"),
+        ("LEVEL-2","Level 2 – Intermediate Composition & Lighting","L2-ICL",45,20,5,4,50.0,
+         "High/low key, framing, positive & negative space"),
+        ("LEVEL-3","Level 3 – Professional Photography Fundamentals Completion Certificate","L3-PPF",60,20,5,4,50.0,
+         "Advanced analytical MCQs & short answers"),
+        ("EPM-IWP","Elite Professional Master in Indian Wedding Photography","EPM-IWP",90,20,5,4,60.0,
+         "Subject oriented, technical & practical field work"),
+        ("EPM-EP","Elite Professional Master in Event Photography","EPM-EP",90,20,5,4,60.0,
+         "Subject oriented, technical & practical field work"),
+        ("EPM-CPP","Elite Professional Master in Commercial Product Photography","EPM-CPP",90,20,5,4,60.0,
+         "Subject oriented, technical & practical field work"),
+        ("EPM-WP","Elite Professional Master in Wildlife Photography","EPM-WP",90,20,5,4,60.0,
+         "Subject oriented, technical & practical field work"),
     ]
 
     with get_session() as session:
         for c in certificates:
-            exists = session.exec(
-                select(CertificateType).where(CertificateType.code == c["code"])
-            ).first()
-            if not exists:
-                session.add(CertificateType(**c))
+            if not session.exec(
+                select(CertificateType).where(CertificateType.code == c[0])
+            ).first():
+                session.add(CertificateType(
+                    code=c[0], title=c[1], abbreviation=c[2],
+                    duration_minutes=c[3], mcq_count=c[4],
+                    short_answer_count=c[5], mcq_mark=c[6],
+                    pass_percentage=c[7], description=c[8]
+                ))
         session.commit()
 
 # -------------------------------------------------
@@ -137,7 +80,7 @@ def health():
     return {"status": "ok"}
 
 # -------------------------------------------------
-# LIST CERTIFICATES
+# CERTIFICATE LIST (DROPDOWN)
 # -------------------------------------------------
 @app.get("/certificates")
 def list_certificates():
@@ -155,51 +98,7 @@ def list_certificates():
         ]
 
 # -------------------------------------------------
-# LEVEL-1 MCQs + ANSWER KEY
-# -------------------------------------------------
-LEVEL_1_QUESTIONS = [
-    {
-        "id": 1,
-        "question": "Which element controls the amount of light entering the camera?",
-        "options": ["ISO", "Shutter Speed", "Aperture", "White Balance"],
-    },
-    {
-        "id": 2,
-        "question": "Which camera setting primarily controls image noise?",
-        "options": ["Aperture", "ISO", "Shutter Speed", "Focal Length"],
-    },
-    {
-        "id": 3,
-        "question": "Shutter speed mainly affects which aspect of a photograph?",
-        "options": ["Colour saturation", "Motion blur", "Lens sharpness", "Sensor size"],
-    },
-    {
-        "id": 4,
-        "question": "What does a lower f-number (e.g. f/1.8) indicate?",
-        "options": ["Small aperture", "Large aperture", "Low ISO", "Slow shutter speed"],
-    },
-    {
-        "id": 5,
-        "question": "Which three elements form the exposure triangle?",
-        "options": [
-            "ISO, Aperture, Shutter Speed",
-            "ISO, Focus, Zoom",
-            "Aperture, White Balance, FPS",
-            "Shutter Speed, Colour, ISO",
-        ],
-    },
-]
-
-LEVEL_1_ANSWER_KEY = {
-    1: 3,
-    2: 2,
-    3: 2,
-    4: 2,
-    5: 1,
-}
-
-# -------------------------------------------------
-# EXAM QUESTIONS
+# LOAD EXAM QUESTIONS (DB-BASED)
 # -------------------------------------------------
 @app.get("/exam/{certificate_code}/questions")
 def get_exam(certificate_code: str):
@@ -207,11 +106,30 @@ def get_exam(certificate_code: str):
         cert = session.exec(
             select(CertificateType).where(CertificateType.code == certificate_code)
         ).first()
-
         if not cert:
             raise HTTPException(404, "Invalid certificate")
 
-        questions = LEVEL_1_QUESTIONS if certificate_code == "LEVEL-1" else []
+        questions_db = session.exec(
+            select(Question).where(Question.certificate_code == certificate_code)
+        ).all()
+
+        questions = []
+        for q in questions_db:
+            if q.question_type == "MCQ":
+                options = session.exec(
+                    select(MCQOption).where(MCQOption.question_id == q.id)
+                ).all()
+                questions.append({
+                    "id": q.id,
+                    "question": q.question_text,
+                    "options": [o.option_text for o in options],
+                })
+            else:
+                questions.append({
+                    "id": q.id,
+                    "question": q.question_text,
+                    "type": "SHORT",
+                })
 
         return {
             "certificate": f"{cert.title} ({cert.abbreviation})",
@@ -224,42 +142,79 @@ def get_exam(certificate_code: str):
         }
 
 # -------------------------------------------------
-# EXAM SUBMISSION (MCQ EVALUATION)
+# SUBMIT EXAM (MCQs EVALUATED, SHORT STORED)
 # -------------------------------------------------
 @app.post("/exam/{certificate_code}/submit")
-from fastapi import Body
 def submit_exam(
     certificate_code: str,
     payload: dict = Body(...)
 ):
     answers = payload.get("answers", [])
 
-    if certificate_code != "LEVEL-1":
-        raise HTTPException(400, "Scoring not enabled for this certificate")
+    with get_session() as session:
+        cert = session.exec(
+            select(CertificateType).where(CertificateType.code == certificate_code)
+        ).first()
+        if not cert:
+            raise HTTPException(404, "Invalid certificate")
 
-    total_questions = len(LEVEL_1_ANSWER_KEY)
-    marks_per_question = 4
-    total_marks = total_questions * marks_per_question
+        total_marks = cert.mcq_count * cert.mcq_mark
+        obtained = 0
 
-    obtained = 0
-    for a in answers:
-        qid = a.get("question_id")
-        selected = a.get("selected_option")
-        if LEVEL_1_ANSWER_KEY.get(qid) == selected:
-            obtained += marks_per_question
+        attempt = Attempt(
+            user_id=0,  # anonymous for now
+            certificate_code=certificate_code,
+            total_marks=total_marks,
+            marks_obtained=0,
+            percentage=0,
+            is_passed=False,
+        )
+        session.add(attempt)
+        session.commit()
+        session.refresh(attempt)
 
-    percentage = (obtained / total_marks) * 100
-    passed = percentage >= 50.0
+        for a in answers:
+            q = session.get(Question, a["question_id"])
+            if not q:
+                continue
 
-    return {
-        "total_marks": total_marks,
-        "marks_obtained": obtained,
-        "percentage": round(percentage, 2),
-        "result": "PASS" if passed else "FAIL",
-    }
+            marks = 0
+            if q.question_type == "MCQ":
+                opt = session.exec(
+                    select(MCQOption).where(
+                        MCQOption.question_id == q.id,
+                        MCQOption.option_text != None
+                    )
+                ).all()
+                correct = next((o for o in opt if o.is_correct), None)
+                if correct and a["selected_option"] == opt.index(correct) + 1:
+                    marks = q.marks
+                    obtained += marks
+
+            session.add(Answer(
+                attempt_id=attempt.id,
+                question_id=q.id,
+                answer_text=str(a.get("selected_option")),
+                marks_awarded=marks
+            ))
+
+        percentage = (obtained / total_marks) * 100 if total_marks else 0
+        passed = percentage >= cert.pass_percentage
+
+        attempt.marks_obtained = obtained
+        attempt.percentage = percentage
+        attempt.is_passed = passed
+        session.commit()
+
+        return {
+            "result": "PASS" if passed else "FAIL",
+            "marks_obtained": obtained,
+            "total_marks": total_marks,
+            "percentage": round(percentage, 2),
+        }
 
 # -------------------------------------------------
-# VERIFY CERTIFICATE (PLACEHOLDER)
+# VERIFY CERTIFICATE (UNCHANGED)
 # -------------------------------------------------
 @app.get("/verify/{certificate_code}")
 def verify(certificate_code: str):
