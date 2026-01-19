@@ -1,6 +1,6 @@
-from typing import Optional, List
+from typing import Optional
 from datetime import datetime
-from sqlmodel import SQLModel, Field, create_engine, Session, Relationship
+from sqlmodel import SQLModel, Field, create_engine, Session
 
 
 # --------------------
@@ -11,7 +11,7 @@ engine = create_engine(DATABASE_URL, echo=False)
 
 
 # --------------------
-# EXISTING MODELS (UNCHANGED)
+# CORE MODELS
 # --------------------
 class User(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -51,15 +51,6 @@ class Attempt(SQLModel, table=True):
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
-class Answer(SQLModel, table=True):
-    id: Optional[int] = Field(default=None, primary_key=True)
-
-    attempt_id: int = Field(foreign_key="attempt.id")
-    question_id: int
-    answer_text: Optional[str] = None
-    marks_awarded: int = 0
-
-
 class Certificate(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
 
@@ -75,48 +66,28 @@ class Certificate(SQLModel, table=True):
     verification_url: Optional[str] = None
 
 
-# =================================================
-# NEW MODELS (SAFE ADDITION — NO BREAKING CHANGES)
-# =================================================
-
+# --------------------
+# QUESTION MODELS (NEW)
+# --------------------
 class Question(SQLModel, table=True):
-    """
-    Stores both MCQ and Short Answer questions
-    """
     id: Optional[int] = Field(default=None, primary_key=True)
 
     certificate_code: str = Field(index=True)
     question_text: str
-
-    question_type: str  # "MCQ" or "SHORT"
-    marks: int = 4
-
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-
-    options: List["MCQOption"] = Relationship(back_populates="question")
+    correct_option: int  # 1-based index
 
 
-class MCQOption(SQLModel, table=True):
-    """
-    Stores options for MCQ questions
-    """
+class Option(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
 
     question_id: int = Field(foreign_key="question.id")
     option_text: str
-    is_correct: bool = False
-
-    question: Optional[Question] = Relationship(back_populates="options")
 
 
 # --------------------
 # HELPERS
 # --------------------
 def create_db_and_tables():
-    """
-    Creates tables if they do not exist.
-    Existing data is preserved.
-    """
     SQLModel.metadata.create_all(engine)
 
 
