@@ -3,7 +3,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlmodel import select
 from typing import Optional, List
 from datetime import datetime
-from database import Question, Option
 
 from database import (
     create_db_and_tables,
