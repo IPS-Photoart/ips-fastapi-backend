@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlmodel import select
 from typing import Optional, List
 from datetime import datetime
+from database import Question, Option
 
 from database import (
     create_db_and_tables,
@@ -37,6 +38,8 @@ BASE_URL = "https://ips-fastapi-backend.onrender.com"
 def startup():
     create_db_and_tables()
     seed_certificates()
+    seed_level1_questions()
+
 
 # -------------------------------------------------
 # SEED CERTIFICATES (SAFE)
@@ -70,6 +73,64 @@ def seed_certificates():
                     short_answer_count=c[5], mcq_mark=c[6],
                     pass_percentage=c[7], description=c[8]
                 ))
+        session.commit()
+def seed_level1_questions():
+    from sqlmodel import select
+
+    LEVEL_1_DATA = [
+        (
+            "Which element controls the amount of light entering the camera?",
+            ["ISO", "Shutter Speed", "Aperture", "White Balance"],
+            3,
+        ),
+        (
+            "Which camera setting primarily controls image noise?",
+            ["Aperture", "ISO", "Shutter Speed", "Focal Length"],
+            2,
+        ),
+        (
+            "Shutter speed mainly affects which aspect of a photograph?",
+            ["Colour saturation", "Motion blur", "Lens sharpness", "Sensor size"],
+            2,
+        ),
+        (
+            "What does a lower f-number (e.g. f/1.8) indicate?",
+            ["Small aperture", "Large aperture", "Low ISO", "Slow shutter speed"],
+            2,
+        ),
+        (
+            "Which three elements form the exposure triangle?",
+            [
+                "ISO, Aperture, Shutter Speed",
+                "ISO, Focus, Zoom",
+                "Aperture, White Balance, FPS",
+                "Shutter Speed, Colour, ISO",
+            ],
+            1,
+        ),
+    ]
+
+    with get_session() as session:
+        exists = session.exec(
+            select(Question).where(Question.certificate_code == "LEVEL-1")
+        ).first()
+
+        if exists:
+            return  # already seeded
+
+        for qtext, options, correct in LEVEL_1_DATA:
+            q = Question(
+                certificate_code="LEVEL-1",
+                question_text=qtext,
+                correct_option=correct,
+            )
+            session.add(q)
+            session.commit()
+            session.refresh(q)
+
+            for opt in options:
+                session.add(Option(question_id=q.id, option_text=opt))
+
         session.commit()
 
 # -------------------------------------------------
