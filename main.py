@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlmodel import select
 from typing import Optional
 from datetime import datetime
+from fastapi import Body
 
 from database import (
     create_db_and_tables,
@@ -226,7 +227,11 @@ def get_exam(certificate_code: str):
 # EXAM SUBMISSION (MCQ EVALUATION)
 # -------------------------------------------------
 @app.post("/exam/{certificate_code}/submit")
-def submit_exam(certificate_code: str, payload: dict):
+from fastapi import Body
+def submit_exam(
+    certificate_code: str,
+    payload: dict = Body(...)
+):
     answers = payload.get("answers", [])
 
     if certificate_code != "LEVEL-1":
