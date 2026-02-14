@@ -1,32 +1,29 @@
+from fastapi import FastAPI, HTTPException, Body
+from fastapi.middleware.cors import CORSMiddleware
+from sqlmodel import select
+from typing import List
 from database import (
     create_db_and_tables,
     get_session,
-    User,
     CertificateType,
-    Attempt,
-    Certificate,
-    Answer,
     Question,
     Option,
+    Attempt,
+    Answer,
 )
 
-# -------------------------------------------------
-# APP
-# -------------------------------------------------
 app = FastAPI(title="IPS Certification Backend")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # GitHub Pages
+    allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-BASE_URL = "https://ips-fastapi-backend.onrender.com"
-
-# -------------------------------------------------
+# --------------------
 # STARTUP
-# -------------------------------------------------
+# --------------------
 @app.on_event("startup")
 def startup():
     create_db_and_tables()
@@ -34,9 +31,9 @@ def startup():
     seed_level1_questions()
 
 
-# -------------------------------------------------
-# SEED CERTIFICATES (SAFE)
-# -------------------------------------------------
+# --------------------
+# CERTIFICATE SEED
+# --------------------
 def seed_certificates():
     certificates = [
         ("LEVEL-1","Level 1 – Basic Photography","L1-BP",30,25,0,4,50.0,
@@ -67,40 +64,24 @@ def seed_certificates():
                     pass_percentage=c[7], description=c[8]
                 ))
         session.commit()
-def seed_level1_questions():
-    from sqlmodel import select
 
-    LEVEL_1_DATA = [
-        (
-            "Which element controls the amount of light entering the camera?",
-            ["ISO", "Shutter Speed", "Aperture", "White Balance"],
-            3,
-        ),
-        (
-            "Which camera setting primarily controls image noise?",
-            ["Aperture", "ISO", "Shutter Speed", "Focal Length"],
-            2,
-        ),
-        (
-            "Shutter speed mainly affects which aspect of a photograph?",
-            ["Colour saturation", "Motion blur", "Lens sharpness", "Sensor size"],
-            2,
-        ),
-        (
-            "What does a lower f-number (e.g. f/1.8) indicate?",
-            ["Small aperture", "Large aperture", "Low ISO", "Slow shutter speed"],
-            2,
-        ),
-        (
-            "Which three elements form the exposure triangle?",
-            [
-                "ISO, Aperture, Shutter Speed",
-                "ISO, Focus, Zoom",
-                "Aperture, White Balance, FPS",
-                "Shutter Speed, Colour, ISO",
-            ],
-            1,
-        ),
+
+# --------------------
+# LEVEL 1 QUESTION SEED
+# --------------------
+def seed_level1_questions():
+    data = [
+        ("Which element controls the amount of light entering the camera?",
+         ["ISO","Shutter Speed","Aperture","White Balance"], 3),
+        ("Which camera setting primarily controls image noise?",
+         ["Aperture","ISO","Shutter Speed","Focal Length"], 2),
+        ("Shutter speed mainly affects which aspect of a photograph?",
+         ["Colour saturation","Motion blur","Lens sharpness","Sensor size"], 2),
+        ("What does a lower f-number (e.g. f/1.8) indicate?",
+         ["Small aperture","Large aperture","Low ISO","Slow shutter speed"], 2),
+        ("Which three elements form the exposure triangle?",
+         ["ISO, Aperture, Shutter Speed","ISO, Focus, Zoom",
+          "Aperture, White Balance, FPS","Shutter Speed, Colour, ISO"], 1),
     ]
 
     with get_session() as session:
@@ -109,9 +90,9 @@ def seed_level1_questions():
         ).first()
 
         if exists:
-            return  # already seeded
+            return
 
-        for qtext, options, correct in LEVEL_1_DATA:
+        for qtext, options, correct in data:
             q = Question(
                 certificate_code="LEVEL-1",
                 question_text=qtext,
@@ -126,16 +107,18 @@ def seed_level1_questions():
 
         session.commit()
 
-# -------------------------------------------------
+
+# --------------------
 # HEALTH
-# -------------------------------------------------
+# --------------------
 @app.get("/health")
 def health():
     return {"status": "ok"}
 
-# -------------------------------------------------
-# CERTIFICATE LIST (DROPDOWN)
-# -------------------------------------------------
+
+# --------------------
+# CERTIFICATE LIST
+# --------------------
 @app.get("/certificates")
 def list_certificates():
     with get_session() as session:
@@ -151,14 +134,50 @@ def list_certificates():
             for c in certs
         ]
 
-# -------------------------------------------------
-# LOAD EXAM QUESTIONS (DB-BASED)
-# -------------------------------------------------
+
+# --------------------
+# LOAD QUESTIONS
+# --------------------
+@app.get("/exam/{certificate_code}/questions")
+def get_exam(certificate_code: str):
+    with get_session() as session:
+        cert = session.exec(
+            select(CertificateType).where(CertificateType.code == certificate_code)
+        ).first()
+        if not cert:
+            raise HTTPException(404, "Invalid certificate")
+
+        questions_db = session.exec(
+            select(Question).where(Question.certificate_code == certificate_code)
+        ).all()
+
+        questions = []
+        for q in questions_db:
+            options = session.exec(
+                select(Option).where(Option.question_id == q.id)
+            ).all()
+            questions.append({
+                "id": q.id,
+                "question": q.question_text,
+                "options": [o.option_text for o in options],
+            })
+
+        return {
+            "certificate": f"{cert.title} ({cert.abbreviation})",
+            "duration_minutes": cert.duration_minutes,
+            "mcq_count": cert.mcq_count,
+            "short_answer_count": cert.short_answer_count,
+            "mcq_mark": cert.mcq_mark,
+            "pass_percentage": cert.pass_percentage,
+            "questions": questions,
+        }
+
+
+# --------------------
+# SUBMIT EXAM
+# --------------------
 @app.post("/exam/{certificate_code}/submit")
-def submit_exam(
-    certificate_code: str,
-    payload: dict = Body(...)
-):
+def submit_exam(certificate_code: str, payload: dict = Body(...)):
     answers = payload.get("answers", [])
 
     with get_session() as session:
@@ -168,11 +187,14 @@ def submit_exam(
         if not cert:
             raise HTTPException(404, "Invalid certificate")
 
-        total_marks = cert.mcq_count * cert.mcq_mark
+        questions = session.exec(
+            select(Question).where(Question.certificate_code == certificate_code)
+        ).all()
+
+        total_marks = len(questions) * cert.mcq_mark
         obtained = 0
 
         attempt = Attempt(
-            user_id=0,
             certificate_code=certificate_code,
             total_marks=total_marks,
             marks_obtained=0,
@@ -189,7 +211,7 @@ def submit_exam(
                 continue
 
             marks = 0
-            if a["selected_option"] == q.correct_option:
+            if a.get("selected_option") == q.correct_option:
                 marks = cert.mcq_mark
                 obtained += marks
 
@@ -214,86 +236,3 @@ def submit_exam(
             "total_marks": total_marks,
             "percentage": round(percentage, 2),
         }
-
-
-# -------------------------------------------------
-# SUBMIT EXAM (MCQs EVALUATED, SHORT STORED)
-# -------------------------------------------------
-@app.post("/exam/{certificate_code}/submit")
-def submit_exam(
-    certificate_code: str,
-    payload: dict = Body(...)
-):
-    answers = payload.get("answers", [])
-
-    with get_session() as session:
-        cert = session.exec(
-            select(CertificateType).where(CertificateType.code == certificate_code)
-        ).first()
-        if not cert:
-            raise HTTPException(404, "Invalid certificate")
-
-        total_marks = cert.mcq_count * cert.mcq_mark
-        obtained = 0
-
-        attempt = Attempt(
-            user_id=0,  # anonymous for now
-            certificate_code=certificate_code,
-            total_marks=total_marks,
-            marks_obtained=0,
-            percentage=0,
-            is_passed=False,
-        )
-        session.add(attempt)
-        session.commit()
-        session.refresh(attempt)
-
-        for a in answers:
-            q = session.get(Question, a["question_id"])
-            if not q:
-                continue
-
-            marks = 0
-            if q.question_type == "MCQ":
-                opt = session.exec(
-                    select(Option).where(
-                        Option.question_id == q.id,
-                        Option.option_text != None
-                    )
-                ).all()
-                correct = next((o for o in opt if o.is_correct), None)
-                if correct and a["selected_option"] == opt.index(correct) + 1:
-                    marks = q.marks
-                    obtained += marks
-
-            session.add(Answer(
-                attempt_id=attempt.id,
-                question_id=q.id,
-                answer_text=str(a.get("selected_option")),
-                marks_awarded=marks
-            ))
-
-        percentage = (obtained / total_marks) * 100 if total_marks else 0
-        passed = percentage >= cert.pass_percentage
-
-        attempt.marks_obtained = obtained
-        attempt.percentage = percentage
-        attempt.is_passed = passed
-        session.commit()
-
-        return {
-            "result": "PASS" if passed else "FAIL",
-            "marks_obtained": obtained,
-            "total_marks": total_marks,
-            "percentage": round(percentage, 2),
-        }
-
-# -------------------------------------------------
-# VERIFY CERTIFICATE (UNCHANGED)
-# -------------------------------------------------
-@app.get("/verify/{certificate_code}")
-def verify(certificate_code: str):
-    return {
-        "certificate_code": certificate_code,
-        "status": "Verification endpoint active",
-    }
